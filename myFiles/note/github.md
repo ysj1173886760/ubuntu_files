@@ -29,3 +29,9 @@ git branch <branch-name> 新建分支
 git merge 合并两个分支，即将该分支合并到当前分支上
 
 git rebase 将当前分支移动到该分支下面 （创造更加线性的提交历史）同时也要记得把另一个分支merge到当前节点上，即直接移动
+
+
+
+### git远程操作
+
+git clone 是在本地创建一个远程仓库的拷贝，比如从github.com
