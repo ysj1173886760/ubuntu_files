@@ -10,7 +10,8 @@ Template C++：这是C++的泛型编程，template metaprogramming (TMP 模板�
 
 STL：template程序库，由容器，迭代器，算法以及函数对象所组成
 
-每个次语言都有自己的规约，C++高效编程守则视状况而变化，取决于你使用C++的那一部分
+- 每个次语言都有自己的规约，C++高效编程守则视状况而变化，取决于你使用C++的那一部分
+
 
 ## 条款02：尽量以const，enum，inline替换 #define
 
@@ -63,11 +64,14 @@ CALL_WITH_MAX(++a, b);					//a被加一次
 CALL_WITH_MAX(++a, b + 10);			//a被加两次
 ```
 
-使用inline可以获得宏带来的效率以及一般函数的所有可预料行为和类型安全性
+- 使用inline可以获得宏带来的效率以及一般函数的所有可预料行为和类型安全性
 
-对于单纯常量，最好以const或enum替换#define
 
-对于形似函数的宏，最好改用inline函数替换#define
+- 对于单纯常量，最好以const或enum替换#define
+
+
+- 对于形似函数的宏，最好改用inline函数替换#define
+
 
 ## 条款03：尽可能使用const
 
@@ -155,8 +159,142 @@ char &operator(std::size_t position) {
 
 还有一点，令const版本调用non-const版本是我们不应该做的事，const成员函数承诺绝不改变其对象的逻辑状态（logical state），non-const成员函数没有这样的承诺，如果你在const内部调用了non-const成员函数，就违背了承诺，这样就承担了在其过程中改变对象的风险。
 
-将某些东西声明为const可帮助编译器侦测出错误用法。const可被施加于任何作用域内的任何对象，函数参数，函数返回类型，成员函数本体。
+- 将某些东西声明为const可帮助编译器侦测出错误用法。const可被施加于任何作用域内的任何对象，函数参数，函数返回类型，成员函数本体。
 
-编译器强制实施bitwise constness，但你编写程序的时应该使用“概念上的常量性”（conceptual constness）
 
-当const和non-const成员函数有着实质等价的实现时，令non-const版本调用const版本可避免代码重复
+- 编译器强制实施bitwise constness，但你编写程序的时应该使用“概念上的常量性”（conceptual constness）
+
+
+- 当const和non-const成员函数有着实质等价的实现时，令non-const版本调用const版本可避免代码重复
+
+## 条款04：确定对象被使用前已先被初始化
+
+这里指的对象包括用户自定义的数据类型，以及内置数据类型（比如int，char等）
+
+注意，在某些平台上，仅仅只是读取未初始化的值，就可能让你的程序终止运行
+
+```c++
+int x = 0;			//对int进行手工初始化
+const char* text = "hello world" 	//对指针进行手工初始化
+double d;
+std::cin >> d;		//以读取input stream的方式完成初始化
+```
+
+对于内置类型以外的数据，确保每一个构造函数都将对象的每一个成员初始化
+
+```c++
+ABEntry::ABEntry(const std::string &name, const std::string& address, const std::list<PhoneNumber>& phones) {
+    theName = name;				//这些都是赋值(assignments)
+    theAddress = address;	//而非初始化(initializations)
+    thePhones = phones;
+    numTimesConsulted = 0;
+}
+```
+
+虽然这会导致ABEntry对象带有你期望的值，但这并不是最佳做法。
+
+C++规定，对象的成员变量的初始化动作发生在进入构造函数本体之前
+
+（但是对于内置类型，不保证一定在你所看到的那个赋值动作的时间点之前获得初值）
+
+还记得初始化列表吗？member initialization list
+
+```c++
+ABEntry::ABEntry(const std::string &name, const std::string& address, const std::list<PhoneNumber>& phones) 
+	:theName(name),
+	 theAddress(address),
+	 thePhones(phones),
+	 numTimesConsulted(0)
+{ }									//现在，这些都是初始化。构造函数的本体不必有任何动作
+```
+
+基于赋值的版本首先调用了default构造函数设定初值，然后在对他们进行赋值
+
+而初始化列表直接用实参对成员进行初始化，本例中即调用了copy构造
+
+由于编译器会为用户自定义类型的成员变量自动调用default构造函数——如果那些成员变量没有在初始化列表中指定初值的话，这可能引起一些夸张的写法
+
+请立下一个规则，规定总是在初始化列表中列出所有的成员变量
+
+有些情况下，即使面对的成员变量属于内置类型，也一定要用初始化列表，比如成员变量是const或者references，他们就一定需要初始化
+
+C++有着十分固定的成员初始化次序，base classes更早与其derived classes被初始化，而class的成员变量总是以其声明的次序被初始化
+
+为了避免一些晦涩的错误，请你在初始化列表罗列各个成员时，最好总是按照其声明次序来罗列
+
+最后就只剩一个内容了，但是这个也是最重要的一个
+
+*不同编译单元内定义之non-local static对象的初始化次序*
+
+static对象，其寿命是从被构造出来到程序结束为止，函数内的static对象被称为local static对象（因为他们对函数而言是local），其他的static对象，包括global对象，定义于namespace作用域内的对象，在classes内，在函数内，以及在file作用域内的static对象就是non-local static对象
+
+所谓编译单元，就是指产出单一目标文件的那些源码，基本上他是单一源码文件加上其所含入的头文件（single object file and #include files）
+
+现在，我们所关心的问题涉及到至少两个源码文件，每一个内含至少一个non-local static对象，如果编译单元内的某个non-local static对象的初始化动作使用了另一个编译单元的某个non-local static对象，它所用到的这个对象可能尚未被初始化，因为C++对定义于不同编译单元内的non-local static对象的初始化次序并无明确定义
+
+这是有原因的：决定它们的初始化次序相当困难，非常困难，根本无解。在其最常见形式，也就是多个编译单元内的non-local static对象经由模板隐式具现化implicit template instantiations形成（而后者自己可能也是经由模板隐式具现化形成），不但不可能决定正确的初始化次序，甚至往往不值得寻找可决定正确次序的特殊情况
+
+幸运的是一个小小的设计就可以完全消除这种问题，唯一需要做的就是，将内个non-local static对象搬到自己的专属函数内，这些函数返回一个reference指向它所含的对象，然后用户调用这些函数，而不直接指涉这些对象，换句话说，non-local static对象被local static对象替换了。这是Design Patterns中，Singleton模式的一个常见的实现手法
+
+因为C++保证，函数内的local static对象会在函数被调用期间，首次遇上该对象的定义式时被初始化。
+
+更棒的是，如果你从未调用non-local static对象的“仿真函数”，就绝不会引发构造和析构成本
+
+还有一点，任何一种non-const static对象，不论他是local还是non-local，在多线程环境下等待某事发生都会有麻烦，处理这个麻烦的一种做法是，在程序的单线程启动阶段(single threaded startup portion)手工调用所有reference-returning函数，这可以消除与初始化有关的“竞速形势”(race conditions)
+
+当然了，上述方法能够给成功前提是你要有一个合理的初始化次序。
+
+- 为内置型对象进行手工初始化，因为c++不保证初始化他们
+- 构造函数最好使用初始化列表，而不要在构造函数本体内使用赋值操作。初始化列表列出的成员变量，其排列次序应该和他们在class中的声明次序相同。
+- 为免除“跨编译单元的初始化次序”问题，请以local static对象替换non-local static对象
+
+## 条框05：了解C++默默编写并调用那些函数
+
+一个empty class，在C++处理之后，编译器就会为他声明一个copy构造函数，一个copy assignment操作符和一个析构函数，此外如果你没有声明构造函数，编译器也会帮你声明一个default构造函数，所有的函数都是public且inline的
+
+```c++
+//如果你写下这样的代码
+class Empty { }；
+//就好像你写下了
+class Empty {
+public:
+	Empty() {}
+	Empty(const Empty& rhs) {}
+	~Empty() {}
+	Empty& operator=(const Empty& rhs) {}
+}; 
+```
+
+如果其中声明了一个构造函数，那么编译器就不会再为他创建default构造函数
+
+对于编译器生成的copy构造函数，他只是单纯的将对象的每一个non static成员变量拷贝到目标对象
+
+对于copy assignment函数来说，其行为基本上与copy构造函数如出一辙，但是会有特殊情况出现
+
+考虑如下代码
+
+```c++
+template<class T>
+class NamedObject {
+public: 
+	NamedObject(std::string &name, const T &value);
+private:
+	std::string &nameValue;
+	const T objectValue;
+};
+std::string newDog("A");
+std::string oldDog("B");
+NamedObject<int> p(newDog, 2);
+NamedObject<int> s(oldDog, 3);
+p = s;
+```
+
+赋值之前，p和s的nameValue都指向着string对象，但是由于reference是不可被改动的，所以编译器会拒绝这一行的赋值动作。
+
+注意，copy assignment会被拒绝，但是copy构造不会，因为他是在初始化的时候将引用作为初值，并不是在改变引用自身，即const和reference可以被初始化但不能被赋值
+
+如果你打算在一个内含reference成员，或者内含const成员的class内支持赋值操作，那么你必须自己定义copy assignment操作符。
+
+同时，如果一个base class的copy assignment操作符声明为了private，那么编译器同样会拒绝对其derived class生成copy assignment操作符，因为他们无法调用derived class无法调用的函数
+
+- 编译器可以暗自为class创建default构造函数，copy构造函数，copy assignment操作符以及析构函数
