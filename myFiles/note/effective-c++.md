@@ -298,3 +298,32 @@ p = s;
 同时，如果一个base class的copy assignment操作符声明为了private，那么编译器同样会拒绝对其derived class生成copy assignment操作符，因为他们无法调用derived class无法调用的函数
 
 - 编译器可以暗自为class创建default构造函数，copy构造函数，copy assignment操作符以及析构函数
+
+## 条框06：若不想使用编译器自动生成的函数，就该明确拒绝
+
+条款05有提到，对于copy构造函数和copy assignment操作符来说，即使你不声明他们，编译器也会在他们被使用的时候自动帮你声明，那么就出现了一个问题，倘若我们不希望我们的class拥有拷贝或者赋值的功能怎么办。
+
+答案的关键是，编译器产出的函数都是public的，你可以将copy构造函数和copy assignment操作符声明为private，这样你阻止了编译器自动创建其专属版本，也组织了人们调用它
+
+但是这并不是绝对安全的，因为member函数和friend函数还是可以调用你的private函数，除非你足够聪明，不去定义它们，这样如果某些人不慎调用任何一个的时候，会获得一个连接错误。
+
+这一个技巧被广泛应用，看看手中的ios_base,basic_ios等库，你会发现他们的copy构造函数和copy assignment操作符都是被声明为private且没有定义
+
+当你需要使用相关的类的时候，创建一个专门为了组织copying动作而设计的base class中
+
+```c++
+class Uncopyable {
+protected:
+	Uncopyable() {}
+	~Uncopyable() {}
+private:
+	Uncopyable() {const Uncopyable&};
+	Uncopyable& operaotr=(const Uncopyable);
+};
+```
+
+然后让你的class去集成这个class即可
+
+虽然这会涉及到很多别的小问题，但是通常情况下你都可以忽略这些点
+
+- 为驳回编译器自动（暗自）提供的机能，可将相应的成员函数声明为private并且不予实现。使用像Uncopyable这样的base class也是一种做法
