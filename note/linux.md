@@ -75,3 +75,7 @@
 
 ![image-20201019173039337](/home/sheep/.config/Typora/typora-user-images/image-20201019173039337.png)
 
+touch filename 创建文件
+
+![image-20201030114339757](/home/sheep/.config/Typora/typora-user-images/image-20201030114339757.png)
+

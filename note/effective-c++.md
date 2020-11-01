@@ -327,3 +327,44 @@ private:
 虽然这会涉及到很多别的小问题，但是通常情况下你都可以忽略这些点
 
 - 为驳回编译器自动（暗自）提供的机能，可将相应的成员函数声明为private并且不予实现。使用像Uncopyable这样的base class也是一种做法
+
+## 条款07：为多态基类声明virtual析构函数
+
+考虑如下代码
+
+```c++
+class Timekeeper {
+public:
+	TimeKeeper();
+	~TimeKeeper();
+}
+class AtomicClock: public TimeKeeper {};
+class WaterClock: public TimeKeeper {}；
+classWristWatch: public TimeKeeper {};
+```
+
+我们可以通过设计factory（工厂）函数，返回指针指向一个计时对象，factory函数会返回一个base class指针，指向新生成的derived class对象
+
+`TimeKeeper* getTimeKeeper()`
+
+注意，被TimeKeeper返回的对象必须位于heap。因此为了避免泄露内存和其他资源，将factory函数返回的每一个对象适当的delete掉很重要
+
+getTimeKeeper返回的指针指向一个derived class对象，但是却由一个base class指针被删除，同时，目前的base class有一个non-virtual 析构函数
+
+C++明确指出，当derived clas对象由一个base class指针被删除，而该base class带有一个non-virtual析构函数，其结果未有定义
+
+实际执行时通常发生的是对象的derived成分没被销毁，因为derived class的析构函数没执行起来，就导致了一个局部销毁的对象
+
+解决问题的方法很简单，给base class一个virtual 析构函数，他就会销毁整个对象。
+
+这种base class通常还有其他的virtual函数，任何class 只要带有virtual函数都几乎确定应该也有一个virtual析构函数
+
+当声明了virtual函数以后，对象将会带有vptr（virtual table pointer）指针，该指针指向一个由函数指针构成的数组，成为vtbl（virtual table），虚函数表记录了该对象在调用函数时应该调用的函数指针。
+
+倘若在不需要虚析构函数的情况下声明虚函数，就会导致一定的浪费以及一些其他的问题。
+
+所以无端的将所有的函数都声明为virtual是错误的。
+
+部分的class没有virtual析构函数，也就不希望你取继承他们
+
+有时候让class带一个pure virtual函数较为便利，倘若你想拥有一个抽象的class

@@ -10,46 +10,23 @@
 #include<cmath>
 using namespace std;
 
+const int INF = 0x3f3f3f3f;
+
 void solve() {
     int n;
     cin >> n;
-    vector<int> a(n);
-    vector<bool> check(3 * n + 1, true);
-    for (int i = 0; i < n; i++) cin >> a[i];
+    vector<int> a(n + 1);
+    for (int i = 1; i <= n; i++) cin >> a[i];
+    vector<vector<int>> dp (n + 1, vector<int>(2 * n + 1, INF));
     sort(a.begin(), a.end());
-    long long ans = 0;
-    for (int i = n - 1; i >= 0; i--) {
-        int x = a[i];
-        int l = x;
-        int r = x;
-        if (check[x]) {
-            check[x] = false;
-        } else {
-            while(1) {
-                if (r < 3 * n) {
-                    r++;
-                    if(check[r]) {
-                        check[r] = false;
-                        break;
-                    }
-                }
-                if (l > 1) {
-                    l--;
-                    if (check[l]) {
-                        check[l] = false;
-                        break;
-                    } 
-                }
-            }
+    for (int i = 0; i <= 2 * n; i++) dp[0][i] = 0;
+    for (int i = 1; i <= n; i++) {
+        for (int j = 1; j <= 2 * n; j++) {
+            dp[i][j] = min(dp[i][j - 1], dp[i - 1][j - 1] + abs(a[i] - j));
         }
-//        cout << x << " " << ans << endl;
     }
-    int now = 3 * n;
-    for (int i = n - 1; i >= 0; i--) {
-        while (check[now]) now--;
-        ans += abs(a[i] - now);
-        now--;
-    }
+    int ans = INF;
+    for (int i = 1; i <= 2 * n; i++) ans = min(ans, dp[n][i]);
     cout << ans << endl;
 }
 int main() {
@@ -60,4 +37,3 @@ int main() {
     }
     return 0;
 }
-
