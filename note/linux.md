@@ -79,3 +79,14 @@ touch filename 创建文件
 
 ![image-20201030114339757](/home/sheep/.config/Typora/typora-user-images/image-20201030114339757.png)
 
+
+
+word 命令可以直接打开word
+
+evince可以直接打开pdf
+
+使用zsh终端时，修改的配置文件是.zshrc
+
+注意在使用alias时等号的左右两边不能有空格
+
+如果文件名字中带有空格，那么用双引号将文件名括起来再cd即可

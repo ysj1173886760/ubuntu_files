@@ -367,4 +367,163 @@ C++明确指出，当derived clas对象由一个base class指针被删除，而�
 
 部分的class没有virtual析构函数，也就不希望你取继承他们
 
-有时候让class带一个pure virtual函数较为便利，倘若你想拥有一个抽象的class
+有时候让class带一个pure virtual函数较为便利，倘若你想拥有一个抽象的class，但是没有任何pure virtual函数怎么办？ 你可以定义一个pure virtual析构函数
+
+但是要记得为这个析构函数提供一份定义
+
+- polymorphic（带多态性质的）base classes应该声明一个virtual析构函数，如果class带有任何virtual函数，他就应该拥有一个virtual析构函数
+- classes的设计目的如果不是作为base classes使用，或不是为了具备多态性（polymorphically）,就不应该声明virtual析构函数
+
+# 条款08：别让异常逃离析构函数
+
+C++并不禁止析构函数吐出异常，他只是不建议你这样做
+
+假设在析构函数中被抛出了异常，考虑你当前有若干个这样的对象，那么就有可能出现若干个同时作用的异常，在两个异常同时存在的情况下，程序若不是结束执行就是导致不明确行为
+
+假设你当前用一个class负责数据库连接
+
+```c++
+class DBConnection {
+public:
+    static DBConnection create();	//返回DBConnection对象
+    void close();		//关闭联机，失败则抛出异常
+};
+```
+
+为了确保客户不忘记在DBConnection对象身上调用close()，一个合理的想法是创建一个用来管理DBConnection资源的class，并在其析构函数中调用close
+
+```c++
+class DBConn {
+public:
+    ~DBConn() {		//确保数据库连接总是会被关闭
+        db.close();
+    }
+private:
+    DBConnection db;
+};
+```
+
+那么用户就可以写出这样的代码`DBConn dbc(DBConnection::create());`
+
+只要close调用成功，一切都是美好的，但是如果该调用出现异常，DBConn析构函数就会传播该异常
+
+有两个方法可以避免这个问题
+
+```c++
+//如果close抛出异常就结束程序，通常可以用abort完成
+DBConn::~DBConn() {
+	try {db.close()}
+	catch (...) {
+		//制作运转记录，记下对close调用失败
+		std::abort();
+	}
+}
+```
+
+tip：abort函数和exit函数的区别，exit会释放所有的静态的全局对象，缓存，关闭所有的I/O通道，最后关闭程序，但是对象还是不会被正确析构的。而对于abort来说，就是直接terminate程序，没有任何的清理工作。
+
+那么上面的做法就是调用abort，在异常传播出去之前结束程序
+
+```c++
+//吞下因调用close而发生的异常
+DBConn::~DBConn() {
+	try{db.close();}
+    catch (...) {
+        //制作运转记录，记下对close调用失败
+    }
+}
+```
+
+一般来说，吞掉异常是个坏主意，因为他压制了某些动作失败的重要信息，但是这有时也比草率结束程序或不明确行为带来的风险好
+
+一个比较好的方法是重新设计DBConn接口，让用户有一个机会可以处理因该操作而产生的异常
+
+```c++
+class DBConn{
+public:
+    void close() {
+		db.close();
+        closed = true;
+    }
+    ~DBConn() {
+        if (!closed) {
+            try {
+                db.close();
+            } catch (...) {
+				//制作运转记录，记下对close调用失败
+            }
+        }
+    }
+private:
+    DBConnection db;
+    bool closed;
+}
+```
+
+这样就把调用close的责任从DBConn析构函数的手上转到了用户的手上
+
+如果他们自己没有调用close或者没有去处理调用失败的异常，出现了错误的时候，用户没有立场抱怨，因为他们曾经有机会第一手处理问题，而他们选择了放弃
+
+- 析构函数绝对不要吐出异常。如果一个被析构函数调用的函数可能抛出异常，析构函数应该捕捉任何异常，然后吞下他们（不传播）或结束程序
+- 如果客户需要对某个操作函数运行期间抛出的异常做出反应，那么class应该提供一个普通函数（而非在析构函数中）执行该操作
+
+# 条款09：绝不在构造和析构过程中调用virtual函数
+
+首先考虑如下代码
+
+```c++
+class Transaction {
+public:
+	Transaction();
+	virtual void logTransaction() const = 0;
+};
+Transaction::Transaction() {
+	logTransaction();
+}
+class BuyTransaction: public Transaction {
+public:
+	virtual void logTransaction() const;
+};
+```
+
+当我们尝试构建derived class的对象时，首先会调用base class的构造函数，在构造函数中，他调用了virtual函数，但是他调用的函数是base class内的版本，即使当前正在构建的是derived class的对象
+
+base class构造期间virtual函数绝不会下降到derived class阶层，因为如果是那样的话，derived class的virtual函数几乎必会使用local成员变量，但是那些是都没有被初始化的成员变量，这将会是一张通往不明确行为和彻夜调试大会的直达车票。
+
+derived class在base class构造期间，对象的类型是derived class，不只是virtual函数会被解析为base class，dynamic_cast和typeid都会将对象视为base class类型，调用构造函数时，BuyTransaction的专属成分尚未被初始化，所以最安全的做法就是视他们不存在，derived class构造函数开始前他都不会是一个derived class对象。
+
+相同的道理也适用于析构函数
+
+有的时候编译器会为此发出一个警告信息，但有的时候不会
+
+所以唯一避免此问题的做法是，确定你的构造函数和析构函数都没有（在对象被创建和被销毁期间）调用virtual函数，而他们调用的所有函数也都服从同一约束
+
+还有其他的方案可以解决此问题，将class Transation内将logTranslation函数改为non-virtual，然后要求derived class构造函数内传递必要信息给Transaction构造函数
+
+```c++
+class Transaction {
+public: 
+    explicit Transaction(const std::string &logInfo);
+    void logTransaction(const std::string &logInfo) const;
+};
+Transaction::Transaction(const std::string &logInfo) {
+    logTransaction(logInfo);
+}
+class BuyTransaction {
+public:
+    BuyTransaction(parameters) : Transaction(createLogString( parameters )) {...}
+private:
+    static std::string createLogString( parameters );
+};
+```
+
+换句话说你无法使用virtual函数从base classes向下调用，在构造期间，你可以用“令derived classes将必要的构造信息向上传递至base class构造函数”替换之
+
+explicit防止函数调用时的参数进行隐式的类型转换，因为在默认规定中，只有一个参数的构造函数也定义了一个隐式转换
+
+private static函数，比起初始化列表，利用辅助函数创建一个值给base class构造函数往往比较方便（也比较可读）（？？？ 可读我理解，为什么方便呢）
+
+令此函数为static，也就不可能意外指向对象中尚未初始化的成员变量，这很重要，我们就是为了防止使用未定义的成员变量才这样做的
+
+- 在构造和析构期间不要调用virtual函数，因为这类调用从不下降至derived class（比起当前执行构造函数和析构函数的那层）
+
