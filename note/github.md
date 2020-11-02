@@ -10,7 +10,7 @@ git commit -am 等价于git commit -a -m
 
 至于-m 就是加上提交的注释罢了
 
-
+使用add指令就会把文件加入到暂存区中 使用status进行查看
 
 ### git基础操作
 
