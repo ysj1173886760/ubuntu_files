@@ -303,7 +303,7 @@ p = s;
 
 条款05有提到，对于copy构造函数和copy assignment操作符来说，即使你不声明他们，编译器也会在他们被使用的时候自动帮你声明，那么就出现了一个问题，倘若我们不希望我们的class拥有拷贝或者赋值的功能怎么办。
 
-答案的关键是，编译器产出的函数都是public的，你可以将copy构造函数和copy assignment操作符声明为private，这样你阻止了编译器自动创建其专属版本，也组织了人们调用它
+答案的关键是，编译器产出的函数都是public的，你可以将copy构造函数和copy assignment操作符声明为private，这样你阻止了编译器自动创建其专属版本，也阻止了人们调用它
 
 但是这并不是绝对安全的，因为member函数和friend函数还是可以调用你的private函数，除非你足够聪明，不去定义它们，这样如果某些人不慎调用任何一个的时候，会获得一个连接错误。
 
@@ -374,7 +374,7 @@ C++明确指出，当derived clas对象由一个base class指针被删除，而�
 - polymorphic（带多态性质的）base classes应该声明一个virtual析构函数，如果class带有任何virtual函数，他就应该拥有一个virtual析构函数
 - classes的设计目的如果不是作为base classes使用，或不是为了具备多态性（polymorphically）,就不应该声明virtual析构函数
 
-# 条款08：别让异常逃离析构函数
+## 条款08：别让异常逃离析构函数
 
 C++并不禁止析构函数吐出异常，他只是不建议你这样做
 
@@ -467,7 +467,7 @@ private:
 - 析构函数绝对不要吐出异常。如果一个被析构函数调用的函数可能抛出异常，析构函数应该捕捉任何异常，然后吞下他们（不传播）或结束程序
 - 如果客户需要对某个操作函数运行期间抛出的异常做出反应，那么class应该提供一个普通函数（而非在析构函数中）执行该操作
 
-# 条款09：绝不在构造和析构过程中调用virtual函数
+## 条款09：绝不在构造和析构过程中调用virtual函数
 
 首先考虑如下代码
 
@@ -527,3 +527,149 @@ private static函数，比起初始化列表，利用辅助函数创建一个值
 
 - 在构造和析构期间不要调用virtual函数，因为这类调用从不下降至derived class（比起当前执行构造函数和析构函数的那层）
 
+## 条款10：令 operator= 返回一个reference to \*this
+
+关于赋值，我们通常可以把他写成连锁形式
+
+`x = y = z = 10`
+
+赋值采用右结合律，即`x = (y = (z = 10))`
+
+为了实现连锁赋值，赋值操作符必须返回一个reference指向操作符的左侧实参
+
+```c++
+class Widget {
+public:
+    Widget& operator=(const Widget &rhs) {
+        return *this;
+    }
+};
+```
+
+这个协议适用于所有赋值相关的运算
+
+有的时候或许你不用这个方法结果也是正确的，是因为利用了c++赋值采用右结合律的特性，当表达式加上括号的时候你就不总是那么幸运了。
+
+- 令赋值（assignment）操作符返回一个 reference to \*this
+
+## 条款11：在 operator= 中处理“自我赋值”
+
+对象的自我赋值就是用自己给自己赋值
+
+一些隐含的情况`a[i] = a[j]`或`*px = *py`
+
+当i等于j时，当px和py指向的是相同的东西时，就会出现这种状况
+
+你可能会想，自我赋值怎么了？应该不会出现什么问题的才对，毕竟自我赋值没有改变什么
+
+考虑如下代码
+
+```c++
+class Widget {
+private:
+	Bitmap *pb; //指向一个从heap分配得到的对象
+}
+Widget& Widget::operator=(const Widget& rhs) {
+	delete pb;
+	pb = new Bitmap(*rhs.pb);
+	return *this;
+}
+```
+
+ 考虑如果你在这个对象中自我赋值会出现什么情况
+
+你会先销毁对象，这同时也销毁了rhs的bitmap，那么结果就是你就用指针指向了一个已经被销毁的对象
+
+想要阻止这种错误，一个很传统的方法就是在前面加上 `if (this == &rhs) return *this`
+
+虽然这个方法可以让你具有自我赋值安全性，但是如果new Bitmap导致异常，Widget最终仍然会持有一块被删除的Bitmap
+
+但是好处在于，具备异常安全性的代码也具有自我赋值安全性，所以你只要注意“许多时候一群精心安排的语句就可以导出异常安全以及自我赋值安全的代码”
+
+```c++
+Widget& Widget::operator= (cont Widget& rhs) {
+	Bitmap* pOrig = pb;
+	pb = new Bitmap(*rhs.pb);
+	delete pOrig;
+	return *this;
+}
+```
+
+或许这不是处理自我赋值的最高效办法，但是他行得通，因为就算他遇到了自我赋值的情况，他只是做了一个复件，删除了原件并指向了新的复件
+
+有一个替代方案是使用所谓的copy and swap技术
+
+```c++
+Widget& Widget::operator= (const Widget &rhs) {
+	Widget temp(rhs);
+	swap(temp);
+	return *this;
+}
+```
+
+上述手法为rhs创造了一个副本，并与\*this交换，函数结束时，会自动销毁掉这个创造的副本
+
+还有一种手段，利用了以下事实(1)：某class的copy assignment操作符可能被声明为“以by value方式接受实参”；(2)：以by value的方式传递东西会造成一份副本：
+
+```c++
+Widget& Widget::operator=(Widget rhs) {
+	swap(rhs);
+	return *this;
+}
+```
+
+上述手法通过pass by value的手段创造了一份副本，并将其和\*this互换
+
+巧妙的修补牺牲了清晰性，但是copying动作从函数本体移至函数参数构造阶段却可令编译器有时生成更高效的代码
+
+- 确保当对象自我赋值时 operator= 有良好行为。其中技术包括比较“来源对象”和“目标对象”的地址，精心周到的语句顺序，以及copy-and-swap
+- 确定任何函数如果操作一个以上的的对象，而其中多个对象是同一个对象时，其行为仍然正确
+
+## 条款12：复制对象时勿忘其每一个成分
+
+考虑这种情况，你在类的copying函数中写好了每个成员变量的赋值，但是你突然需要增加一个成员变量，这时如果你只是单纯的改变相关的逻辑，不改变copying函数的话，程序还是会正常编译的，但是由于你没有写新变量的copy，就会导致运行中的错误
+
+注意copying函数表示的是copy构造函数和copy assignment操作符
+
+上述的问题编译器是不会给你任何提示的，所以结论很明显，当你为class增加一个成员变量，你必须同时修改copying函数
+
+再考虑，如果发生继承，就会出现一个潜藏的危机
+
+```c++
+class PriorityCustomer:public Customer {
+public:
+	PriorityCustomer(const PriorityCustomer& rhs);
+	PriorityCustomer& operator=(const PriorityCustomer& rhs);
+private:
+	int priority;
+};
+PriorityCustomer::PriorityCustomer(const PriorityCustomer &rhs) : priority(rhs.priority) {}
+PriorityCustomer& PriorityCustomer::operator(const PriorityCustomer &rhs) {
+	priority = rhs.priority;
+	return *this;
+}
+```
+
+看起来copying函数好像赋值了PriorityCustomer里的每一个东西，但是他其实只是复制了derived class的变量，并没有复制他所继承的变量，因此PriorityCustomer对象的Customer部分会被不带实参的Customer构造函数进行构造
+
+所以任何时候，只要你承担起为derived class撰写copying函数的重任，你必须很小心的也复制其base class成分，你应该让derived class的copying函数调用相应的base class函数
+
+```c++
+PriorityCustomer::PriorityCustomer(const PriorityCustomer &rhs) : Customer(rhs), priority(rhs.priority) {}
+PriorityCustomer& PriorityCustomer::operator(const PriorityCustomer &rhs) {
+	Customer::operator=(rhs);
+	priority = rhs.priority;
+	return *this;
+}
+```
+
+所以请确保你复制了所有local的成员变量，调用了所有base classes内的适当的copying函数
+
+请注意，有时这两个函数往往有着相似的实现本体，诱惑着你想要用一个调用另一个来实现代码精简
+
+但是这是不合理的，在赋值中进行构造，或者对一个未构造成功的对象进行赋值都是无意义甚至可能出现问题的
+
+如果你发现你的copying函数有着相似的代码，消除重复的做法是建立一个新的成员函数给两者调用，这样的函数往往是private而且常被命名为init
+
+- copying函数应该确保复制“对象内的所有成员变量”及“所有base class”成分
+- 不要尝试以某个copying函数实现另一个copying函数。应该将共同机能放进第三个函数中，并由两个copying函数共同调用
