@@ -90,3 +90,10 @@ evince可以直接打开pdf
 注意在使用alias时等号的左右两边不能有空格
 
 如果文件名字中带有空格，那么用双引号将文件名括起来再cd即可
+
+
+
+rm -rf  ——其实是rm -r -f   -recursive(递归的，循环的) -force(强制的)
+
+![image-20201104093855452](/home/sheep/.config/Typora/typora-user-images/image-20201104093855452.png)![image-20201104093907696](/home/sheep/.config/Typora/typora-user-images/image-20201104093907696.png)
+
