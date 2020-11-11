@@ -151,3 +151,23 @@
 
 ![image-20201107162317120](/home/sheep/.config/Typora/typora-user-images/image-20201107162317120.png)
 
+![image-20201107163223963](/home/sheep/.config/Typora/typora-user-images/image-20201107163223963.png)
+
+![image-20201107163237332](/home/sheep/.config/Typora/typora-user-images/image-20201107163237332.png)
+
+证明满射 对于任意y都存在一个x使 y = f(x)
+
+证明入射 任意x1 != x2 都有f(x1) != f(x2)
+
+![image-20201107163631987](/home/sheep/.config/Typora/typora-user-images/image-20201107163631987.png)
+
+第三问反证法
+
+![image-20201108141420113](/home/sheep/.config/Typora/typora-user-images/image-20201108141420113.png)
+
+![image-20201108141745288](/home/sheep/.config/Typora/typora-user-images/image-20201108141745288.png)
+
+![image-20201108142101150](/home/sheep/.config/Typora/typora-user-images/image-20201108142101150.png)
+
+![image-20201108154401591](/home/sheep/.config/Typora/typora-user-images/image-20201108154401591.png)
+
