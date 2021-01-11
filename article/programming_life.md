@@ -1,11 +1,4 @@
-![image-20201104090648449](/home/sheep/.config/Typora/typora-user-images/image-20201104090648449.png)
-
-作者：杏仁糖
-链接：https://www.zhihu.com/question/61803539/answer/1396144551
-来源：知乎
-著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
-
-
+![20201207213650](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20201207213650.png)
 
 25条工作和生活原则
 

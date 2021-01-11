@@ -29,7 +29,7 @@
 
 这里我给出前序遍历的代码，结合代码可以对算法有深一步的理解
 
-```c++
+```cpp
 class Solution {
 public:
     vector<int> preorderTraversal(TreeNode* root) {
@@ -77,7 +77,7 @@ public:
 
 最后给出后序遍历的代码结合理解
 
-```c++
+```cpp
 void Add(TreeNode* now, vector<int> &ans) {
         vector<int>temp;
         while(now) {

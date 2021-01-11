@@ -6,7 +6,7 @@
 
 ### basics of moving in vim
 
-![image-20201030120740780](/home/sheep/.config/Typora/typora-user-images/image-20201030120740780.png)
+![20201213194746](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20201213194746.png)
 
 prefacing a movement command with a number will execute that movement multiple times
 
@@ -14,7 +14,7 @@ prefacing a movement command with a number will execute that movement multiple t
 
 `x`to delete the character that the cursor was on
 
-![image-20201030121624374](/home/sheep/.config/Typora/typora-user-images/image-20201030121624374.png)
+![20201213194804](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20201213194804.png)
 
 several commands combine a text operation and movement key. 
 
@@ -22,11 +22,11 @@ you may combine something together like verb+noun. and the answer of vim is ofte
 
 ### searching and replacing
 
-![image-20201030151649713](/home/sheep/.config/Typora/typora-user-images/image-20201030151649713.png)
+![20201213194821](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20201213194821.png)
 
 about how to clear last searching highlighting in vim
 
-![image-20201030152121771](/home/sheep/.config/Typora/typora-user-images/image-20201030152121771.png)
+![20201213194839](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20201213194839.png)
 
 `:noh`really helps a lot
 
@@ -34,7 +34,7 @@ about how to clear last searching highlighting in vim
 
 if you\`ve run dd and delete an entire line, you can now hit p and paste it back into the document.
 
-![image-20201031145832137](/home/sheep/.config/Typora/typora-user-images/image-20201031145832137.png)
+![20201213194851](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20201213194851.png)
 
 a usual paste operation might look like this: hit v or V to highlight some text, then hit y to yank(put) it into the buffer, then move the cursor where u want to it, and hit p in command mode. There you go.
 

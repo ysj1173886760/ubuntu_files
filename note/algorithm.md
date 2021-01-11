@@ -23,15 +23,15 @@ mt19937 rand_num(seed); //先创建mt19937对象，构造函数的参数为随�
 //最后再调用_name(rand_num)来获得随机数
 ```
 
-![image-20201109123800407](/home/sheep/.config/Typora/typora-user-images/image-20201109123800407.png)
+![20201213194110](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20201213194110.png)
 
 其中我们使用mt19937作为uniform_int_distribution的随机引擎
 
-​	![image-20201109124301475](/home/sheep/.config/Typora/typora-user-images/image-20201109124301475.png)
+![20201213194200](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20201213194200.png)
 
 要用random_device先创建一个对象，再用对象来生成随机数
 
-![image-20201109124421681](/home/sheep/.config/Typora/typora-user-images/image-20201109124421681.png)
+![20201213194217](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20201213194217.png)
 
 ## unordered_map以pair做键
 
