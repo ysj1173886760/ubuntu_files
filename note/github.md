@@ -35,3 +35,7 @@ git rebase 将当前分支移动到该分支下面 （创造更加线性的提�
 ### git远程操作
 
 git clone 是在本地创建一个远程仓库的拷贝，比如从github.com
+
+![20210319182336](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20210319182336.png)
+
+![20210319182345](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20210319182345.png)
