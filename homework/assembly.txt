@@ -1,0 +1,76 @@
+5.6
+1244H
+03H
+78H
+69H
+26H
+26H
+0302H
+1234H
+
+5.7
+0
+0D01
+81
+400
+48D0
+1E
+0D3
+0D2F0
+
+
+5.8
+XOR AL, 00001100
+
+AND AL, 11110011
+
+OR AL, 00001100
+
+MOV AL, [MEMB]
+MOV AH, 1 [MEMB]
+MOV 1 [MEMB], AL
+MOV [MEMB], AH
+
+5.20
+
+0A5H 11010
+053H 10010
+080H 11001
+0C2H 01001
+032H 00000
+
+6.10
+mov ds.ax
+mov ax.sseg
+mov ss.ax
+mov ah,0
+int 16h
+cmp al,'0'
+jnz con1
+mov bx,1000
+add bx,dax
+jmp result
+con1: cmp al,'1'
+jnz con2
+mov bx.dax
+mov cl,02h
+sal bx,cl
+add bx,dax
+add bx,1
+jmp result
+con2: mov bx,dax
+and bx,bx
+jns result
+neg bx
+result: mov day,bx
+mov ah,4ch
+int 21h
+
+6.12
+0213 0 0
+0913 0000 96 57 13 BE 00 00 8A 04
+
+6.13
+1201 0106
+0923 0120 02 89 47 02 cc
+
