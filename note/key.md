@@ -1,1 +1,0 @@
-![image-20201107203155042](/home/sheep/.config/Typora/typora-user-images/image-20201107203155042.png)
