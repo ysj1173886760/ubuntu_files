@@ -114,3 +114,46 @@ leveldb的读取分为三步
 3. 按从低到高的顺序在level i层中查找key，若找到则结束。否则返回NotFound
 
 注意在leveldb中第0层，可能出现key重合的情况，所以要优先找文件号大的sstable。而在非0层中，所有文件之间的key不重合，所以可以借助sstable的元数据来快速定位。所以每一层只要读一次。
+
+# 日志
+
+![20220401200850](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220401200850.png)
+
+leveldb中，有两个memory db，对应了两份日志文件。当一个memory db被冻结的时候，与之对应的log也会变成frozen log
+
+当后台的minor compaction进程将其转换成一个sstable文件持久化以后，对应的frozen log就会被删除
+
+## 日志结构
+
+![20220401201052](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220401201052.png)
+
+日志按照block划分，每个block大小为32kb
+
+一个日志记录包含一个或多个chunk，每个chunk包含一个7字节大小的header，前4字节是checksum，2字节是数据长度，最后一个字节是chunk类型
+
+chunk有四种类型，full，first，middle，last。一条日志记录只包含一个chunk，则chunk为full。如果包含多个chunk，那么第一个是first，最后一个是last，中间则是middle。
+
+因为一个block大小为32kb，所以当日志过大的时候，我们就会拆分数据，并把chunk划分成first，middle，last的格式
+
+## 日志内容
+
+日志为写入的batch编码后的信息
+
+![20220401201707](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220401201707.png)
+
+header中包含了sequence number，以及本次日志中包含的put/del操作的个数
+
+后面则是所有batch编码后的内容
+
+## 日志写
+
+![20220401201923](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220401201923.png)
+
+写入的时候不断判断buffer的大小，如果超过32kb就作为一个完整的chunk写入文件。写完数据注意要计算对应的header
+
+## 日志读
+
+![20220401204616](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220401204616.png)
+
+一次读一个block，每次读一个chunk，并校验数据，直到读到最后一个chunk，返回整个日志记录
+
