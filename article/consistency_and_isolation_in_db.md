@@ -38,7 +38,7 @@ Database isolation refers to the ability of a database to allow a transaction to
 
 隔离级别指定了对于并发的事务来说，他们应该怎么操作。如果两个事务没有同时运行，那么他们自己本身就是完全隔离的。这就是为什么在最高级别的隔离状态下，仍然可能发生time travel
 
-很多的一致性级别都提供了实时的保证，比如线性化保证了非并发的操作是根据real-time排序的。而sequential consistency和causal consistency也保证了单线程下的一致性。
+很多的一致性级别都提供了实时的保证，比如线性化保证了非并发的操作是根据real-time排序的。而sequential consistency和causal consistency也保证了单线程下的实时性。
 
 ![20220401161233](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220401161233.png)
 
