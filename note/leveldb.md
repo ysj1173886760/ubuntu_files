@@ -246,3 +246,153 @@ nodeData中，每个跳表节点占用一段连续的空间，每一个字节分
 （有点奇怪的是如果这样存储节点，我们怎么回收内存呢？）
 
 答案是不回收，我们只添加不删除。删除操作其实是添加一个空的节点
+
+# SSTable
+
+当memtable中的数据超过了预设的阈值的时候，我们会将当前的memtable冻结成一个不可更改的内存数据库，然后将memtable持久化到磁盘中
+
+设计minor compaction的目的是为了降低内存的使用率，同时避免文件日志过大，系统恢复时间过长。
+
+## 物理结构
+
+![20220403153501](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403153501.png)
+
+一个sstable文件按照固定大小进行块划分，默认每个块的大小为4KB。每个block中除了数据以外还有两个额外的字段。分别是压缩类型和CRC校验码
+
+## 逻辑结构
+
+逻辑上，根据功能不同，leveldb在逻辑上将sstable分为
+1. data block， 用于存储kv对
+2. filter block，用来存储过滤器相关的结构
+3. meta index block，用来存储filter block的索引信息
+4. index block，用来存储每个data block的索引信息
+5. footer，用来存储meta index block和index block的索引信息
+
+![20220403153742](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403153742.png)
+
+## data block结构
+
+data block中存储的数据是leveldb中的kv对。一个data block中的数据部分（不包括CRC，压缩类型）按逻辑以下图划分
+
+![20220403153912](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403153912.png)
+
+由于sstable中所有的kv对是按序存储的，所以为了节省空间leveldb只会存储当前key与上一个key非共享的部分
+
+每间隔若干个keyvalue对将该条记录重新存储为一个完整的key。成为Restart point
+
+![20220403154129](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403154129.png)
+
+在读取的时候，可以先利用restart point的数据进行比较，从而快速定位目标数据所在的区域。然后再依次对区间内所有数据项比较。
+
+每个数据项的格式如图：
+
+![20220403154300](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403154300.png)
+
+1. 与前一条key共享部分的长度
+2. 与前一条key不共享部分的长度
+3. value长度
+4. 与前一条key不共享的内容
+5. value内容
+
+## filter block结构
+
+为了加快查询效率，在直接查询data block中内容之前，首先根据filter block中的过滤数据判断指定的datablock中是否有需要查询的数据。
+
+fliter block存储的是一般是布隆过滤器的数据
+
+![20220403154623](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403154623.png)
+
+filter block存储主要为两部分，过滤数据和索引数据
+
+在读取filter block中的内容时，首先读出filter offset's offset，然后读取filter i offset，根据这个offset再读出filter data
+
+BaseLg的默认值为11,表示每2KB的数据创建一个新的过滤器来存放过滤数据
+
+一个sstable只有一个filter block，存储了所有block的filter数据。具体的，filter_data_k包含了所有起始位置处于base * k到base * (k + 1)内的block的filter数据
+
+## meta index block结构
+
+meta index block只存储一条记录
+
+key为filter与过滤器名字组成的常量字符串
+
+value为filter block在sstable中的索引信息，索引信息包含（1）在sstable中的偏移量，（2）数据长度
+
+（有点奇怪的设计，目的是让footer定长么？）
+
+## index block结构
+
+index block存储若干条记录，每一条记录代表一个data block的索引信息
+
+一条索引包含：
+1. data block i最大的key值
+2. 该data block起始地址在sstable中的偏移量
+3. 该data block的大小
+
+![20220403160548](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403160548.png)
+
+这样看上去data block不是定长的
+
+## footer结构
+
+![20220403160903](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403160903.png)
+
+果然footer大小是固定的。48字节。用来存储meta index block以及index block的索引信息。尾部还会存储一个magic word
+
+## 写操作
+
+sstable的写操作发生在
+* memory db将内容持久化到磁盘中时
+* leveldb后台进行compaction时
+
+一次sstable的写入为不断调用迭代器获取需要写入的数据，并不断调用tableWriter的Append函数，最后为sstable附上文件元数据的过程。
+
+迭代器可以是一个memory db的迭代器，也可以是一个sstable文件的迭代器。
+
+sstable内部会存储他的元数据吗？（存储文件大小，最大最小key值等），貌似不会，这些值是通过读取已有的元数据块导出来的
+
+tableWriter的结构
+
+![20220403162127](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403162127.png)
+
+pendingBH记录了上一个datablock的索引信息，当下一个datablock开始写入的时候，将该索引信息写入indexblock中
+
+一次Append的逻辑：
+1. 若本次写入为新datablock的第一次写入，则将上一个datablock的索引写入
+2. 将keyvalue数据写入datablock
+3. 将filter信息写入filterblock
+4. 若datablock中的数据超过上限，则将内容刷新到磁盘文件中
+
+在将data block写入磁盘时，需要以下工作：
+1. 封装datablock，记录restart point的个数
+2. 若datablock的数据需要进行压缩，则压缩
+3. 计算checksum（这里说的是checksum还是CRC？）
+4. 封装datablock的索引信息
+5. 将datablock的buffer中的数据写入磁盘文件
+6. 将过滤信息生成过滤数据，写到filterblock的buffer中
+
+最后关闭文件的时候：
+1. 如果buffer中有未写入的数据，封装成一个datablock写入
+2. 将filterblock的内容写入磁盘
+3. 将filterblock的索引信息写入到metaindexblock中
+4. 写入indexblock
+5. 写入footer
+
+## 读操作
+
+![20220403163150](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403163150.png)
+
+有个疑问是为什么会存在两个可能的datablock，不是因为可能有相同的值（因为sequence number的原因不会出现相同的值），而是索引的原因，看下面
+
+leveldb中，使用cache缓存两类数据：
+* sstable文件句柄以及元数据
+* datablock中的数据
+
+读取元数据的过程
+![20220403163741](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403163741.png)
+
+要注意的是index block中的索引同样进行了key的截取。但是截取的粒度是2,所以连续的两个索引信息是作为一个最小的比较单元。从而导致最终的区间为两个datablock（难道不能重放一下，这不比新读一个datablock快么？）
+
+![20220403164323](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403164323.png)
+
+在查找datablock的时候，虽然是有序的，但是没有使用二分，而是使用了更大的查找单元（即restart point）来进行顺序遍历
