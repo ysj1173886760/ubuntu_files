@@ -396,3 +396,34 @@ leveldb中，使用cache缓存两类数据：
 ![20220403164323](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220403164323.png)
 
 在查找datablock的时候，虽然是有序的，但是没有使用二分，而是使用了更大的查找单元（即restart point）来进行顺序遍历
+
+# 缓存系统
+
+leveldb使用了一种基于LRU的缓存，用于缓存：
+* 已经打开的sstable文件对象和元数据
+* sstable中的datablock的内容
+
+![20220404210508](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220404210508.png)
+
+leveldb的hashtable可以实现resize过程中不阻塞其他并发的读写请求
+
+哈希表中的每一个bucket的容量是有限的，当超过阈值的时候就会进行扩张
+
+![20220404210912](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220404210912.png)
+
+一次扩张的过程为：
+1. 扩大一倍哈希桶的个数
+2. 创建一个空的哈希表，然后将旧的哈希表冻结
+3. 后台利用旧哈希表中的信息对新的哈希表进行构建
+
+当有新的读写请求的时候，如果发现对应的哈希桶未构建完成，则主动进行构建，并将构建后的哈希桶填入新的哈希表中
+
+（看起来这个冻结的思路很棒，sstable也是这样生成的）
+
+收缩的时候也是类似的
+
+LRU中的双向链表存储了哈希表中的指针，可以在我们从LRU中驱逐数据的时候安全的删除数据。由于哈希表中的数据可能正在被其他线程使用，所以需要通过引用计数来防止数据被不安全的删除
+
+leveldb有两种缓存：
+* cache： 缓存sstable文件句柄以及元数据
+* bcache： 缓存sstable中datablock的数据
