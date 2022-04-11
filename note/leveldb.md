@@ -445,3 +445,107 @@ keys中存储了需要添加进去的key。而对于k个哈希函数来说，我
 对于检查来说，重新应用一次hash的过程，然后判断对应的位是否存在即可。
 
 对于double hash的问题，因为leveldb使用的bloom hash不会取余，而是直接得到一个uint的整数，这样两个字符串能得到相同hash值的概率就很小。用这个值再去放到bloom filter中冲突就会少很多
+
+# Compaction
+
+一些基础概念前面已经说过了
+
+因为major compaction是一个多路归并的过程，会导致大量的磁盘读写。所以为了防止写入速度超过major compaction的速度。leveldb规定：
+* 当0层文件数量超过SlowdownTrigger时，写入速度减慢
+* 当0层文件数量超过PauseTrigger时，写入暂停，直至major compaction完成
+
+![20220411195357](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411195357.png)
+
+文章中说minor compaction会阻塞写入，这个我不太明白为什么会阻塞。按理说冻结memtable，创建新的memtable就可以
+
+![20220411195629](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411195629.png)
+
+当以下几个条件触发时，会进行major compaction：
+* 0层文件数量超过预订的上限
+* level i层文件的总大小超过了10^i MB
+* 某个文件无效读取的次数过多
+
+因为0层有overlap，所以0层文件过多会影响效率，所以要限制0层文件的数量
+
+对于非0层文件来说，因为0层文件的key取值范围很大，所以会导致每次合并时一层文件的输入量也很大，因为你要覆盖0层文件的key range。所以我们也要控制非0层文件的个数。
+
+对于无效读取的情况，是因为leveldb希望进行错峰合并，因为有可能同一时刻有多个层达成了major compaction的条件，所以我们需要大量的资源进行合并
+
+![20220411201320](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411201320.png)
+
+所以在sstable的元数据中，有一个额外的字段seekLeft，默认为文件大小除以16KB
+
+我们记录每次用户访问的第一个sstable文件，如果文件命中，则不做任何处理，否则让seekLeft减一，当seekLeft等于0的时候，进行错峰合并
+
+## 过程
+
+compaction分为以下几步：
+1. 寻找合适的输入文件
+2. 根据key重叠情况扩大输入文件集合
+3. 多路合并
+4. 积分计算
+
+### 寻找输入文件
+
+对于level 0层文件数过多或者level i层总量过大的场景来说，采用轮转的方法。我们记录上一次该层合并文件的最大key，下一次选择在此key之后的首个文件
+
+对于错峰合并，起始文件就是查询次数过多的文件
+
+### 扩大输入文件集合
+
+如下：
+1. 红星标注的为起始输入文件
+2. 在level i层中，查找与起始输入文件有重叠的文件，如图中红线
+3. 利用level i层的输入文件，在level i + 1层中找重叠的文件，为图中绿线
+4. 在不扩大level i + 1层文件的前提下，找level i层中有重叠的文件，如图中蓝线
+
+![20220411203030](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411203030.png)
+
+### 多路合并
+
+多路合并即将输入文件按序归并，输出到level i+1层
+
+![20220411203334](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411203334.png)
+
+### 积分计算
+
+即重新计算文件个数以及大小，从而挑选出下一次需要合并的层数
+
+* 对于0层文件，该层的分数为文件总数/4
+* 对于非0层文件，该层的分数为文件数据总量/数据总量上限
+
+分数超过1就会作为下一次合并的层数
+
+我突然想到一个问题，他没有说压缩时候的一致性。我猜测应该是通过原子的rename来进行的。并不是，是通过版本
+
+# 版本控制
+
+manifest文件专用于记录版本信息。一个manifest文件中有多个session record，一个session record记录了从上一个版本到该版本的变化情况。包括：（1）新增了那些sstable，（2）删除了那些sstable，（3）最新的journal日志文件标号
+
+（所以看起来是通过版本信息来实现一致性的）
+
+![20220411205309](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411205309.png)
+
+每次leveldb完成了compaction等修改sstable的时候，就会进行版本升级
+
+![20220411205808](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411205808.png)
+
+![20220411210110](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411210110.png)
+
+## Recover
+
+![20220411210142](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411210142.png)
+
+## 异常处理
+
+![20220411210454](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411210454.png)
+
+## 多版本并发控制
+
+当我们用迭代器读取某个sstable的时候，如果后台的major compaction完成了合并，就会试图删除sstable文件。最简单的方式就是加锁，但是这样会阻塞后台的写操作
+
+leveldb使用了MVCC，体现在：
+1. sstable是只读的，所以每次compaction不会影响现有的读操作
+2. sstable具有版本信息，所以可以保证读写操作是针对于相应的版本文件
+3. compaction生成的文件会在合并完成后才写入元数据，所以读操作不会看到他的写
+4. 通过引用计数来控制删除
