@@ -427,3 +427,21 @@ LRU中的双向链表存储了哈希表中的指针，可以在我们从LRU中�
 leveldb有两种缓存：
 * cache： 缓存sstable文件句柄以及元数据
 * bcache： 缓存sstable中datablock的数据
+
+# 布隆过滤器
+
+![20220411190627](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220411190627.png)
+
+这里他的手册里我感觉写的怪怪的，我直接看源码然后写一下要注意的点
+
+bloom filter在utils/bloom.cc中
+
+bits_per_key就是上面的m/n，即每个key可以分配多少位。代码中通过计算ln2 * bits_per_key来得到最佳的哈希函数的个数
+
+然后CreateFilter中，首先计算我们要用到多少byte来存储bloom filter。bloom filter在leveldb中是一个字符串，最后一个数字是hash函数的数量
+
+keys中存储了需要添加进去的key。而对于k个哈希函数来说，我们并不是真的有k个，而是一个k次的循环，每次更改得到的哈希的值。我有点奇怪，这样的话如果BloomHash相同那么两个key不就相同了么。
+
+对于检查来说，重新应用一次hash的过程，然后判断对应的位是否存在即可。
+
+对于double hash的问题，因为leveldb使用的bloom hash不会取余，而是直接得到一个uint的整数，这样两个字符串能得到相同hash值的概率就很小。用这个值再去放到bloom filter中冲突就会少很多
