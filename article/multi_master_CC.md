@@ -41,7 +41,7 @@ for (write_set, timestamp) in txn_list.rev() {
 
 这样的话，我们发现TxnB被Abort的时候，他就可以把A上面的row header回滚，从而保证TxnA的提交
 
-需要我们额外保存before-image，并且更细节的情况还需要仔细的考虑
+需要我们额外保存before-timestamp，并且更细节的情况还需要仔细的考虑
 
 ## Serializability
 
@@ -59,6 +59,29 @@ for Main-Memory Database Systems]的启发，我们可以不去追踪读集，�
 由于我们每个节点本来就有了所有的写集，我们只需要验证从事务开始到提交这段时间中的写集，和事务的读集有无冲突
 
 具体一点，当一个事务T提交的时候，他可以找到在$T_{start-timestamp}$到$T_{commit-timestamp}$之间的成功提交事务的写集。然后把事务T中的每个读谓词都应用到这些写集中，当有写集满足了我们的谓词，说明他更改了我们的读，我们应该abort
+
+利用precision lock的一个好处就是，他可以提供更细粒度的检查。比如在Postgres中的SIREAD会锁住整个行。但是如果修改的是这个行，但不是我们读的那个列的话，其实修改是没有影响的。所以我们这里实际上跟踪了谓词以及读取的属性，从而获得更细粒度的检索，降低Abort rate
+
+```Rust
+fn Commit(txn: Transaction) {
+    let write_set = FetchWriteSet(txn.beginEpoch, currentEpoch);
+    for (predicate, attributes) in txn.read_lists {
+        for entry in write_set {
+            if entry.Attributes().Intersect(attributes) &&
+               Apply(predicate, entry) {
+                txn.SetAbort();
+                break;
+            }
+        }
+
+        if txn.IsAbort() {
+            break;
+        }
+    }
+
+    return !txn.IsAbort();
+}
+```
 
 好处就是这个验证是可开关的，并且谓词的传输开销相对于写集来说要小很多。如果实现正确的话，我们基本上可以不引入额外的开销。
 
@@ -82,8 +105,35 @@ Communication/Computation tradeoff?
 
 比如数据量比较大，我们可以选择传SQL，数据量小，可以传写集，从而避免重复解析的开销
 
+```Rust
+// example
+fn process(query: SQL) {
+    let ast = Parse(query);
+    let plan = Planner(ast);
+    if Estimate(TransmissionOverhead(plan), ExecutionOverhead(plan)) {
+        Communicator::Transmit(query);
+    } else {
+        let write_set = Execute(plan);
+        Communicator::Transmit(write_set);
+    }
+}
+
+fn receiver(data: RemoteData) {
+    let write_set;
+    if data.IsSQL() {
+        let ast = Parse(data);
+        let plan = Planner(ast);
+        write_set = Execute(plan);
+    } else {
+        write_set = Deserialize(data);
+    }
+
+    TransactionManager::Append(write_set);
+}
+```
+
 challenge：
-1. 细节需要仔细考虑，对于混合的方法来说，我们需要像写集一样提前定序，给出他要读的快照，以及他所属的Epoch。否则不同远端可能导致解析结果不同
+1. 细节需要仔细考虑，对于混合的方法来说，我们需要像写集一样提前定序，给出他要读的快照，以及他所属的Epoch。否则不同远端可能导致解析结果不同。而且SQL的重新解析以及执行可能会拖慢这个Epoch的快照的生成时间，一个解决办法就是把它推到未来的Epoch中
 2. 不清楚这个方法能不能有提高，因为这里的计算和通信不像图计算中那样明显，我们更多还是数据密集型
 3. 不容易实现，实现起来贯穿整个DBMS，需要保证我们的代码不会导致bottleneck
 
