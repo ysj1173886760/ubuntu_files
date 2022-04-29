@@ -49,8 +49,7 @@ for (write_set, timestamp) in txn_list.rev() {
 
 多个主节点之间发送读集的开销是相当大的
 
-受到这篇论文[Fast Serializable Multi-Version Concurrency Control
-for Main-Memory Database Systems]的启发，我们可以不去追踪读集，而是追踪谓词，具体的名字叫Precision Locking
+受到这篇论文[Fast Serializable Multi-Version Concurrency Control for Main-Memory Database Systems]的启发，我们可以不去追踪读集，而是追踪谓词，具体的名字叫Precision Locking
 
 论文中的一个示例
 
