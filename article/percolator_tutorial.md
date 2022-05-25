@@ -168,3 +168,4 @@ Percolator的核心思路就是将提交点放到第一个写入的元素上面�
 
 ![20220525105311](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220525105311.png)
 
+![20220525133706](https://picsheep.oss-cn-beijing.aliyuncs.com/pic/20220525133706.png)
